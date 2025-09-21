@@ -28,7 +28,26 @@ class MLP(nn.Module):
         """
         super(MLP, self).__init__()
         
-        raise NotImplementedError()
+        # Build the network architecture
+        layers = []
+        
+        # Input layer to first hidden layer
+        if hidden_layers:
+            layers.append(nn.Linear(input_size, hidden_layers[0]))
+            layers.append(nn.ReLU())
+            
+            # Hidden layers
+            for i in range(len(hidden_layers) - 1):
+                layers.append(nn.Linear(hidden_layers[i], hidden_layers[i + 1]))
+                layers.append(nn.ReLU())
+            
+            # Output layer
+            layers.append(nn.Linear(hidden_layers[-1], output_size))
+        else:
+            # No hidden layers, direct input to output
+            layers.append(nn.Linear(input_size, output_size))
+        
+        self.layers = nn.Sequential(*layers)
 
     @typechecked
     def forward(self, x: t.Tensor) -> t.Tensor:
@@ -41,7 +60,7 @@ class MLP(nn.Module):
         Returns:
             t.Tensor: The output tensor from the MLP.
         """
-        raise NotImplementedError()
+        return self.layers(x)
     
 @typechecked
 def setup_model(input_size: int, hidden_layers: list[int], output_size: int, device: t.device) -> tuple[MLP, nn.Module, t.optim.Optimizer]:
@@ -60,7 +79,17 @@ def setup_model(input_size: int, hidden_layers: list[int], output_size: int, dev
             - criterion (nn.Module): The loss function.
             - optimizer (t.optim.Optimizer): The optimizer for updating model parameters.
     """
-    raise NotImplementedError()
+    # Create the model
+    model = MLP(input_size, hidden_layers, output_size)
+    model = model.to(device)
+    
+    # Define loss function (MSE for regression)
+    criterion = nn.MSELoss()
+    
+    # Define optimizer (Adam with reasonable default learning rate)
+    optimizer = t.optim.Adam(model.parameters(), lr=0.001)
+    
+    return model, criterion, optimizer
 
 @typechecked
 def train_model(model: MLP, train_loader: t.utils.data.DataLoader, criterion: nn.Module, optimizer: t.optim.Optimizer, num_epochs: int) -> MLP:
@@ -77,4 +106,34 @@ def train_model(model: MLP, train_loader: t.utils.data.DataLoader, criterion: nn
     Returns:
         MLP: The trained MLP model.
     """
-    raise NotImplementedError()
+    model.train()  # Set model to training mode
+    
+    for epoch in range(num_epochs):
+        total_loss = 0.0
+        num_batches = 0
+        
+        for batch_idx, (data, target) in enumerate(train_loader):
+            # Zero the gradients
+            optimizer.zero_grad()
+            
+            # Forward pass
+            output = model(data)
+            
+            # Calculate loss
+            loss = criterion(output, target)
+            
+            # Backward pass
+            loss.backward()
+            
+            # Update parameters
+            optimizer.step()
+            
+            total_loss += loss.item()
+            num_batches += 1
+        
+        # Print progress every 100 epochs
+        if (epoch + 1) % 100 == 0 or epoch == 0:
+            avg_loss = total_loss / num_batches
+            print(f'Epoch [{epoch+1}/{num_epochs}], Average Loss: {avg_loss:.6f}')
+    
+    return model
