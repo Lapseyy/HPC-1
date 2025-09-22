@@ -82,6 +82,10 @@ def run_tests() -> None:
 
     # device for MLP
     device = t.device("cuda" if t.cuda.is_available() else "cpu")
+    
+    # Enable cuDNN benchmark mode for potential performance improvement
+    t.backends.cudnn.benchmark = True
+    
     print("torch.cuda.is_available():", t.cuda.is_available())
     if t.cuda.is_available():
         print("CUDA:", t.version.cuda)
@@ -94,14 +98,18 @@ def run_tests() -> None:
 
     # 3) evaluate polynomial orders 1..5
     rows = []
-    # 1 - 4 for testing purposes. 
-    for d in range(1, 4):
+    # 1 - 4 for testing purposes.
+    
+     
+    for d in range(1, 2):
     # for d in range(1, 6):
+        print(f"\n=== Degree {d}: starting LS ===")
         Xtr_d = add_polynomial_features(X_tr, d)
         Xte_d = add_polynomial_features(X_te, d)
-        
+    
 ######## Least Squares #######
 
+        
         model = LeastSquares()
         t0 = perf_counter()
         model.fit(Xtr_d, y_tr)
@@ -129,6 +137,7 @@ def run_tests() -> None:
             "Testing R^2":    rsquared(y_te, yte_hat),
         })
         
+        print(f"=== Degree {d}: LS done in {t1 - t0:.2f}s ===")
 ######### Gradient Descent #########
 
         # smaller scale for small processing. 
@@ -162,15 +171,17 @@ def run_tests() -> None:
         if True:
             # Setup model, criterion, and optimizer
             trained_dataset = TensorDataset(t.tensor(Xtr_d, dtype=t.float32), t.tensor(y_tr, dtype=t.float32))
-            train_loader = DataLoader(trained_dataset, batch_size=32, shuffle=True)
+            train_loader = DataLoader(trained_dataset, batch_size=256, shuffle=True, pin_memory= (device.type == "cuda"), num_workers= 0) # Adjust batch size as needed, was 32
             
             # Set up a mini MLP model
             model, criterion, optimizer = setup_model(input_size=Xtr_d.shape[1], hidden_layers=[64, 32], output_size=1, device=device)
             
             # Train the model
+            print(f"=== Degree {d}: starting MLP ===")
             t0 = perf_counter()
-            model = train_model(model, train_loader, criterion, optimizer, num_epochs=200)
+            model = train_model(model, train_loader, criterion, optimizer, num_epochs=10) #switch to 100 for final
             t1 = perf_counter()
+            print(f"=== Degree {d}: MLP done in {t1 - t0:.2f}s ===")
             
             # Predictions (no gradient needed + to device for speed)
             with t.no_grad():
