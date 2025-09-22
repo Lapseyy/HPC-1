@@ -6,7 +6,8 @@ from typeguard import typechecked
 from least_square import LeastSquares
 from time import perf_counter
 from gradient_descent import GradientDescent
-
+from mlp import MLP, setup_model, train_model
+from torch.utils.data import DataLoader, TensorDataset
 
 @typechecked
 def preprocess(X: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -79,6 +80,9 @@ def run_tests() -> None:
     X_raw = df.iloc[:, :4].to_numpy(float)   # features
     y     = df.iloc[:, 4].to_numpy(float)    # target (1-D)
 
+    # dvice for MLP
+    device = t.device("cuda" if t.cuda.is_available() else "cpu")
+    
     # 2) split & scale once
     X_tr, X_te, y_tr, y_te = preprocess(X_raw, y)
 
@@ -131,7 +135,36 @@ def run_tests() -> None:
             "Training time":  (t1 - t0),
             "Testing RMSE":   np.sqrt(np.mean((y_te - yte_hat) ** 2)),
             "Testing R^2":    rsquared(y_te, yte_hat),
-})
+        })
+        
+        # MLP
+        # Setup model, criterion, and optimizer
+        trained_dataset = TensorDataset(t.tensor(Xtr_d, dtype=t.float32), t.tensor(y_tr, dtype=t.float32))
+        train_loader = DataLoader(trained_dataset, batch_size=32, shuffle=True)
+        
+        # Set up a mini MLP model
+        model, criterion, optimizer = setup_model(input_size=Xtr_d.shape[1], hidden_layers=[64, 32], output_size=1, device=device)
+        
+        # Train the model
+        t0 = perf_counter()
+        model = train_model(model, train_loader, criterion, optimizer, num_epochs=200)
+        t1 = perf_counter()
+        
+        # Predictions (no gradient needed + to device for speed)
+        with t.no_grad():
+            model.eval()
+            ytr_hat = model(t.tensor(Xtr_d, dtype=t.float32).to(device)).cpu().numpy().flatten()
+            yte_hat = model(t.tensor(Xte_d, dtype=t.float32).to(device)).cpu().numpy().flatten()
+            
+        rows.append({
+            "Model": "MLP",
+            "Polynomial order": f"Order {d}",
+            "Training RMSE": np.sqrt(np.mean((y_tr - ytr_hat) ** 2)),
+            "Training R^2":   rsquared(y_tr, ytr_hat),
+            "Training time":  (t1 - t0),
+            "Testing RMSE":   np.sqrt(np.mean((y_te - yte_hat) ** 2)),
+            "Testing R^2":    rsquared(y_te, yte_hat),
+        })
 
     # 4) print the table
     # table = pd.DataFrame(rows)
