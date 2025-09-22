@@ -2,3 +2,5 @@ numpy
 pandas
 torch
 typeguard
+scikit-learn
+matplotlib
