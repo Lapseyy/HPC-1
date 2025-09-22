@@ -80,17 +80,27 @@ def run_tests() -> None:
     X_raw = df.iloc[:, :4].to_numpy(float)   # features
     y     = df.iloc[:, 4].to_numpy(float)    # target (1-D)
 
-    # dvice for MLP
+    # device for MLP
     device = t.device("cuda" if t.cuda.is_available() else "cpu")
+    print("torch.cuda.is_available():", t.cuda.is_available())
+    if t.cuda.is_available():
+        print("CUDA:", t.version.cuda)
+        print("cuDNN:", t.backends.cudnn.version())
+        print("GPU:", t.cuda.get_device_name(0))
+    print("Using device:", device)
     
     # 2) split & scale once
     X_tr, X_te, y_tr, y_te = preprocess(X_raw, y)
 
     # 3) evaluate polynomial orders 1..5
     rows = []
-    for d in range(1, 6):
+    # 1 - 4 for testing purposes. 
+    for d in range(1, 4):
+    # for d in range(1, 6):
         Xtr_d = add_polynomial_features(X_tr, d)
         Xte_d = add_polynomial_features(X_te, d)
+        
+######## Least Squares #######
 
         model = LeastSquares()
         t0 = perf_counter()
@@ -110,6 +120,7 @@ def run_tests() -> None:
             return 1.0 - sse / sst
 
         rows.append({
+            "Model": "LS",
             "Polynomial order": f"Order {d}",
             "Training RMSE": rmse_tr,
             "Training R^2":   rsquared(y_tr, ytr_hat),
@@ -118,53 +129,64 @@ def run_tests() -> None:
             "Testing R^2":    rsquared(y_te, yte_hat),
         })
         
-        # Gradient Descent
-        gd = GradientDescent(learning_rate=1e-4, n_iterations=5000, batch_size=len(Xtr_d))
-        t0 = perf_counter()
-        gd.fit(Xtr_d, y_tr)
-        t1 = perf_counter()
+######### Gradient Descent #########
 
-        ytr_hat = gd.predict(Xtr_d)
-        yte_hat = gd.predict(Xte_d)
-
-        rows.append({
-            "Model": "GD",
-            "Polynomial order": f"Order {d}",
-            "Training RMSE": np.sqrt(np.mean((y_tr - ytr_hat) ** 2)),
-            "Training R^2":   rsquared(y_tr, ytr_hat),
-            "Training time":  (t1 - t0),
-            "Testing RMSE":   np.sqrt(np.mean((y_te - yte_hat) ** 2)),
-            "Testing R^2":    rsquared(y_te, yte_hat),
-        })
-        
-        # MLP
-        # Setup model, criterion, and optimizer
-        trained_dataset = TensorDataset(t.tensor(Xtr_d, dtype=t.float32), t.tensor(y_tr, dtype=t.float32))
-        train_loader = DataLoader(trained_dataset, batch_size=32, shuffle=True)
-        
-        # Set up a mini MLP model
-        model, criterion, optimizer = setup_model(input_size=Xtr_d.shape[1], hidden_layers=[64, 32], output_size=1, device=device)
-        
-        # Train the model
-        t0 = perf_counter()
-        model = train_model(model, train_loader, criterion, optimizer, num_epochs=200)
-        t1 = perf_counter()
-        
-        # Predictions (no gradient needed + to device for speed)
-        with t.no_grad():
-            model.eval()
-            ytr_hat = model(t.tensor(Xtr_d, dtype=t.float32).to(device)).cpu().numpy().flatten()
-            yte_hat = model(t.tensor(Xte_d, dtype=t.float32).to(device)).cpu().numpy().flatten()
+        # smaller scale for small processing. 
+        if False:
+            gd = GradientDescent(learning_rate=1e-5, n_iterations=1500, batch_size=len(Xtr_d))
+            # gd = GradientDescent(learning_rate=1e-4, n_iterations=5000, batch_size=len(Xtr_d))
+            t0 = perf_counter()
+            # np.isfinite(Xtr_d).all()
+            # np.isfinite(y_tr).all()
             
-        rows.append({
-            "Model": "MLP",
-            "Polynomial order": f"Order {d}",
-            "Training RMSE": np.sqrt(np.mean((y_tr - ytr_hat) ** 2)),
-            "Training R^2":   rsquared(y_tr, ytr_hat),
-            "Training time":  (t1 - t0),
-            "Testing RMSE":   np.sqrt(np.mean((y_te - yte_hat) ** 2)),
-            "Testing R^2":    rsquared(y_te, yte_hat),
-        })
+            gd.fit(Xtr_d, y_tr)
+            t1 = perf_counter()
+            if not (np.isfinite(Xtr_d).all() and np.isfinite(y_tr).all()):
+                print(f"[WARN] non-finite values at degree {d}")
+                continue
+
+            ytr_hat = gd.predict(Xtr_d)
+            yte_hat = gd.predict(Xte_d)
+
+            rows.append({
+                "Model": "GD",
+                "Polynomial order": f"Order {d}",
+                "Training RMSE": np.sqrt(np.mean((y_tr - ytr_hat) ** 2)),
+                "Training R^2":   rsquared(y_tr, ytr_hat),
+                "Training time":  (t1 - t0),
+                "Testing RMSE":   np.sqrt(np.mean((y_te - yte_hat) ** 2)),
+                "Testing R^2":    rsquared(y_te, yte_hat),
+            })
+        
+######### MLP #########
+        if True:
+            # Setup model, criterion, and optimizer
+            trained_dataset = TensorDataset(t.tensor(Xtr_d, dtype=t.float32), t.tensor(y_tr, dtype=t.float32))
+            train_loader = DataLoader(trained_dataset, batch_size=32, shuffle=True)
+            
+            # Set up a mini MLP model
+            model, criterion, optimizer = setup_model(input_size=Xtr_d.shape[1], hidden_layers=[64, 32], output_size=1, device=device)
+            
+            # Train the model
+            t0 = perf_counter()
+            model = train_model(model, train_loader, criterion, optimizer, num_epochs=200)
+            t1 = perf_counter()
+            
+            # Predictions (no gradient needed + to device for speed)
+            with t.no_grad():
+                model.eval()
+                ytr_hat = model(t.tensor(Xtr_d, dtype=t.float32).to(device)).cpu().numpy().flatten()
+                yte_hat = model(t.tensor(Xte_d, dtype=t.float32).to(device)).cpu().numpy().flatten()
+                
+            rows.append({
+                "Model": "MLP",
+                "Polynomial order": f"Order {d}",
+                "Training RMSE": np.sqrt(np.mean((y_tr - ytr_hat) ** 2)),
+                "Training R^2":   rsquared(y_tr, ytr_hat),
+                "Training time":  (t1 - t0),
+                "Testing RMSE":   np.sqrt(np.mean((y_te - yte_hat) ** 2)),
+                "Testing R^2":    rsquared(y_te, yte_hat),
+            })
 
     # 4) print the table
     # table = pd.DataFrame(rows)
