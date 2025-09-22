@@ -83,6 +83,9 @@ def run_tests() -> None:
     # device for MLP
     device = t.device("cuda" if t.cuda.is_available() else "cpu")
     
+    # TF32 cuDNN benchmark mode for potential performance improvement
+    t.backends.cuda.matmul.allow_tf32 = True
+    
     # Enable cuDNN benchmark mode for potential performance improvement
     t.backends.cudnn.benchmark = True
     
@@ -171,7 +174,7 @@ def run_tests() -> None:
         if True:
             # Setup model, criterion, and optimizer
             trained_dataset = TensorDataset(t.tensor(Xtr_d, dtype=t.float32), t.tensor(y_tr, dtype=t.float32))
-            train_loader = DataLoader(trained_dataset, batch_size=256, shuffle=True, pin_memory= (device.type == "cuda"), num_workers= 0) # Adjust batch size as needed, was 32
+            train_loader = DataLoader(trained_dataset, batch_size= len(Xtr_d), shuffle=False, pin_memory= (device.type == "cuda"), num_workers= 0) # Adjust batch size as needed, was 32
             
             # Set up a mini MLP model
             model, criterion, optimizer = setup_model(input_size=Xtr_d.shape[1], hidden_layers=[64, 32], output_size=1, device=device)
