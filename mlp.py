@@ -27,8 +27,17 @@ class MLP(nn.Module):
             output_size (int): The number of output features.
         """
         super(MLP, self).__init__()
+        # Define the layers of the MLP
+        layers: list[nn.Module] = []
+        in_features = input_size
+        for hidden_units in hidden_layers:
+            layers.append(nn.Linear(in_features, hidden_units))
+            layers.append(nn.ReLU())
+            in_features = hidden_units
+        layers.append(nn.Linear(in_features, output_size))
+        self.layers = nn.Sequential(*layers)
         
-        raise NotImplementedError()
+        
 
     @typechecked
     def forward(self, x: t.Tensor) -> t.Tensor:
@@ -41,8 +50,11 @@ class MLP(nn.Module):
         Returns:
             t.Tensor: The output tensor from the MLP.
         """
-        raise NotImplementedError()
+        # Pass the input through the layers
+        return self.layers(x)
     
+    
+        
 @typechecked
 def setup_model(input_size: int, hidden_layers: list[int], output_size: int, device: t.device) -> tuple[MLP, nn.Module, t.optim.Optimizer]:
     """
@@ -60,7 +72,13 @@ def setup_model(input_size: int, hidden_layers: list[int], output_size: int, dev
             - criterion (nn.Module): The loss function.
             - optimizer (t.optim.Optimizer): The optimizer for updating model parameters.
     """
-    raise NotImplementedError()
+    # Initialize the MLP model and move it to the specified device
+    model = MLP(input_size, hidden_layers, output_size).to(device)
+    
+    criterion = nn.MSELoss()
+    optimizer = t.optim.Adam(model.parameters(), lr=0.001)
+    
+    return model, criterion, optimizer
 
 @typechecked
 def train_model(model: MLP, train_loader: t.utils.data.DataLoader, criterion: nn.Module, optimizer: t.optim.Optimizer, num_epochs: int) -> MLP:
@@ -77,4 +95,32 @@ def train_model(model: MLP, train_loader: t.utils.data.DataLoader, criterion: nn
     Returns:
         MLP: The trained MLP model.
     """
-    raise NotImplementedError()
+    # Set the model to training mode
+    model.train()
+    
+    # Get the device the model is on
+    device = next(model.parameters()).device
+    
+    # Determine the output feature size from the model
+    last_linear = model.layers[-1]                  # final layer is Linear
+    out_features = last_linear.out_features
+
+    for _ in range(num_epochs):
+        for x_batch, y_batch in train_loader:
+            x_batch = x_batch.to(device).float()
+            y_batch = y_batch.to(device).float()
+
+            # ensure y has shape (N, out_features)
+            if y_batch.ndim == 1:
+                y_batch = y_batch.view(-1, 1)
+            if y_batch.shape[1] != out_features:
+                # reshape if possible, else error
+                y_batch = y_batch.view(-1, out_features)
+
+            optimizer.zero_grad()
+            predictions = model(x_batch)
+            loss = criterion(predictions, y_batch)
+            loss.backward()
+            optimizer.step()
+    
+    return model

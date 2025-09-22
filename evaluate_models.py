@@ -5,6 +5,7 @@ import torch as t
 from typeguard import typechecked
 from least_square import LeastSquares
 from time import perf_counter
+from gradient_descent import GradientDescent
 
 
 @typechecked
@@ -112,12 +113,35 @@ def run_tests() -> None:
             "Testing RMSE":   rmse_te,
             "Testing R^2":    rsquared(y_te, yte_hat),
         })
+        
+        # Gradient Descent
+        gd = GradientDescent(learning_rate=1e-4, n_iterations=5000, batch_size=len(Xtr_d))
+        t0 = perf_counter()
+        gd.fit(Xtr_d, y_tr)
+        t1 = perf_counter()
+
+        ytr_hat = gd.predict(Xtr_d)
+        yte_hat = gd.predict(Xte_d)
+
+        rows.append({
+            "Model": "GD",
+            "Polynomial order": f"Order {d}",
+            "Training RMSE": np.sqrt(np.mean((y_tr - ytr_hat) ** 2)),
+            "Training R^2":   rsquared(y_tr, ytr_hat),
+            "Training time":  (t1 - t0),
+            "Testing RMSE":   np.sqrt(np.mean((y_te - yte_hat) ** 2)),
+            "Testing R^2":    rsquared(y_te, yte_hat),
+})
 
     # 4) print the table
+    # table = pd.DataFrame(rows)
+    # # match the sample formatting
+    # with pd.option_context("display.float_format", lambda v: f"{v:.6f}"):
+    #     print(table.to_string(index=False))
     table = pd.DataFrame(rows)
-    # match the sample formatting
     with pd.option_context("display.float_format", lambda v: f"{v:.6f}"):
-        print(table.to_string(index=False))
+        print(table.sort_values(["Polynomial order", "Model"]).to_string(index=False))
+
 
 if __name__ == "__main__":
     run_tests()
