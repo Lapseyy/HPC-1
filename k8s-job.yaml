@@ -1,0 +1,15 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: gas-model-eval
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: eval
+        image: gas-ml:latest          # Docker Desktop shares the local daemon, so this tag works
+        imagePullPolicy: IfNotPresent
+        command: ["python","evaluate_models.py"]
+image: docker.io/
