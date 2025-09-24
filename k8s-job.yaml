@@ -8,8 +8,7 @@ spec:
     spec:
       restartPolicy: Never
       containers:
-      - name: eval
-        image: gas-ml:0.1          # Docker Desktop shares the local daemon, so this tag works
-        imagePullPolicy: never
-        command: ["python","evaluate_models.py"]
-image: docker.io/
+        - name: eval
+          image: gas-m1:0.1            # your local tag
+          imagePullPolicy: Never       # capitalize N
+          command: ["python", "evaluate_models.py"]
