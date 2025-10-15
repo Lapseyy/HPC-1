@@ -1,14 +1,66 @@
+# apiVersion: batch/v1
+# kind: Job
+# metadata:
+#   name: gas-ml-eval
+#   namespace: csuf-titans
+# spec:
+#   backoffLimit: 0
+#   ttlSecondsAfterFinished: 3600
+#   template:
+#     spec:
+#       restartPolicy: Never
+#       # If your repo is private:
+#       # imagePullSecrets:
+#       # - name: dockerhub-creds
+#       containers:
+#       - name: app
+#         image: mydockerhubuser/gas-ml:<YOUR_TAG>   # <-- set this
+#         imagePullPolicy: Always
+#         # If Dockerfile ENTRYPOINT runs the app, you can omit command/args.
+#         # Otherwise uncomment:
+#         # command: ["python","-u","app.py"]
+#         # args: ["--epochs","50","--batch-size","128"]
+#         env:
+#         - name: PYTHONUNBUFFERED
+#           value: "1"
+#         resources:
+#           requests:
+#             cpu: "1"
+#             memory: "2Gi"
+#           limits:
+#             cpu: "2"
+#             memory: "4Gi"
+#         # GPU (optional) — only if your image includes CUDA-enabled PyTorch
+#         # resources:
+#         #   limits:
+#         #     nvidia.com/gpu: 1
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: gas-model-eval
+  name: gas-ml-gpu
+  namespace: csuf-titans
 spec:
   backoffLimit: 0
   template:
+    metadata:
+      labels:
+        app: gas-ml-gpu-v4
     spec:
       restartPolicy: Never
       containers:
-        - name: eval
-          image: gas-m1:0.1            # your local tag
-          imagePullPolicy: Never       # capitalize N
-          command: ["python", "evaluate_models.py"]
+        - name: app
+          image: docker.io/lapseyy/gas-ml:gpu-v4   # <-- update after you push
+          imagePullPolicy: Always
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          resources:
+            requests:
+              cpu: "1"
+              memory: "4Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              # Keep limit:request ratio <= 1.2 to satisfy the cluster policy
+              cpu: "1200m"
+              memory: "4800Mi"
+              nvidia.com/gpu: "1"
